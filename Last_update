@@ -1,0 +1,381 @@
+#include <EEPROM.h>
+#include "SPI.h"
+#include <Adafruit_GFX.h>
+#include <ILI9488.h>
+
+#define TFT_CS A5
+#define TFT_DC A3
+#define TFT_RST A4
+#define TEST_SURESI 40
+#define PARCA 50
+
+ILI9488 tft = ILI9488(TFT_CS, TFT_DC, TFT_RST);
+
+#define BUTTON_UP_PIN A12
+#define BUTTON_DOWN_PIN A13
+#define BUTTON_ENTER_PIN A14
+#define BUTTON_ESC_PIN A15
+
+#define ILI9488_WHITE 0xFFFF
+#define ILI9488_BLUE 0x001F
+#define ILI9488_GREEN 0x07E0
+#define ILI9488_RED 0xF800
+#define ILI9488_BLACK 0x0000
+
+uint8_t selectedOption = 1;  // Başlangıçta ilk seçeneği seçiyoruz
+bool enterPressed = false;
+const char* isim[] = { "Plaka Lambasi" };
+
+int pano = 19;
+
+unsigned int flag;
+int flag_2,error,ekran,ParcaSayisi,OncekiDeger;
+int relayPin= 24,KapakPin = 26;
+
+
+const int Lamba = A10;
+const int Conta1 = A8;
+const int Conta2 = A9;
+const int CheckPiston = 22;
+
+
+const int inputs[] = { Lamba, Conta1, Conta2,};
+const int numInputs = sizeof(inputs) / sizeof(inputs[0]);
+const int buzzerPin = A7;
+
+void setup() {
+  for (int i = 0; i < numInputs; i++) {
+    pinMode(inputs[i], INPUT);
+    digitalWrite(inputs[i], LOW);
+  }
+  pinMode(CheckPiston,INPUT_PULLUP);
+  pinMode(KapakPin,INPUT_PULLUP);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH);
+
+  Serial.begin(9600);
+
+  EEPROM.get(0,ParcaSayisi);
+  EEPROM.put(0,ParcaSayisi);
+
+  pinMode(pano, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(BUTTON_UP_PIN, INPUT);
+  pinMode(BUTTON_DOWN_PIN, INPUT);
+  pinMode(BUTTON_ENTER_PIN, INPUT);
+  pinMode(BUTTON_ESC_PIN, INPUT);
+
+
+  tft.begin();
+  tft.setRotation(3);
+  tft.fillScreen(ILI9488_BLACK);
+  tft.setTextSize(3);
+
+  showMenu();
+
+  while (!enterPressed) {
+    checkButtons();
+  }
+
+  tft.fillScreen(ILI9488_BLACK);
+}
+
+void checkButtons() {
+  if (digitalRead(BUTTON_UP_PIN) == HIGH) {
+    if (selectedOption > 1) {
+      selectedOption--;
+      delay(200);
+      showMenu();
+    }
+  }
+
+  if (digitalRead(BUTTON_DOWN_PIN) == HIGH) {
+    if (selectedOption < 6) {
+      selectedOption++;
+      delay(200);
+      showMenu();
+    }
+  }
+
+  if (digitalRead(BUTTON_ENTER_PIN) == HIGH) {
+    enterPressed = true;
+    delay(200);
+  }
+}
+
+void showMenu() {
+  tft.setCursor(50, 50);
+  tft.setTextColor(ILI9488_WHITE);
+  tft.print("Test Seciniz:");
+
+  for (int i = 1; i <= 1; i++) {
+    tft.setCursor(50, 100 + i * 30);
+    if (selectedOption == i) {
+      tft.setTextColor(ILI9488_GREEN);
+    } else {
+      tft.setTextColor(ILI9488_WHITE);
+    }
+    tft.print("Test ");
+    tft.print(i);
+    tft.print(" = ");
+    tft.print(isim[i - 1]);
+  }
+}
+void loop() {
+  tft.setTextSize(4);
+  digitalWrite(pano, LOW);
+  delay(50);
+
+  if (selectedOption == 1) {
+    while(digitalRead(CheckPiston) == HIGH){
+      delay(100);
+      displayError("Kapak acik");
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(500);
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(100);
+        //Serial.println(digitalRead(CheckPiston));
+    }
+    while(digitalRead(Conta1)==HIGH && digitalRead(Conta2)== HIGH){
+      delay(100);
+      displayError("Lambayi Cikarin");
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(500);
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(100);
+
+    }
+  
+    bool testStarted = false;
+    bool succes = false;
+    flag = -1;
+    flag_2 = 0;
+    error = 0;
+
+  while (!testStarted) {
+    if (digitalRead(Lamba) == LOW && digitalRead(Conta1) == LOW && digitalRead(Conta2) == LOW) {
+        tft.setTextColor(ILI9488_WHITE);
+        tft.setCursor(50, 100);
+        tft.print("Test 1 Hazir,");
+        tft.setCursor(50, 150);
+        tft.print("Test etmek icin");
+        tft.setCursor(50, 200);
+        tft.print("Lambayi Takin");
+        delay(100);
+        KasayaParca();
+        if(digitalRead(KapakPin) == HIGH){
+
+          ParcaSayisi = 0;
+          EEPROM.put(0,ParcaSayisi);
+        }
+      while(ParcaSayisi > PARCA-1){
+        tft.setTextColor(ILI9488_BLACK);
+        tft.setCursor(50, 100);
+        tft.print("Test 1 Hazir,");
+        tft.setCursor(50, 150);
+        tft.print("Test etmek icin");
+        tft.setCursor(50, 200);
+        tft.print("Lambayi Takin");
+        delay(100);
+          tft.setTextColor(ILI9488_RED);
+          tft.setCursor(10, 100);
+          tft.print("Kasa Doldu!");
+          tft.setCursor(10, 150);
+          tft.print("Kasayi bosaltiniz");
+          delay(100);
+          tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(400,20);
+          tft.print(EEPROM.get(0,ParcaSayisi));
+
+          ParcaSayisi = 0;
+          EEPROM.put(0,ParcaSayisi);
+          delay(5000);
+          tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(10, 100);
+          tft.print("Kasa Doldu!");
+          tft.setCursor(10, 150);
+          tft.print("Kasayi bosaltiniz");
+    }
+        
+      } else if (digitalRead(Conta1) == HIGH && digitalRead(Conta2) == HIGH) {
+        tft.setTextColor(ILI9488_BLACK);
+        tft.setCursor(50, 100);
+        tft.print("Test 1 Hazir,");
+        tft.setCursor(50, 150);
+        tft.print("Test etmek icin");
+        tft.setCursor(50, 200);
+        tft.print("Lambayi Takin");
+        delay(100);
+       
+        tft.setTextColor(ILI9488_WHITE);
+        tft.setCursor(50, 100);
+        tft.print("Test Ediliyor");
+        tft.setCursor(50, 150);
+        tft.print("Lutfen Bekleyin");
+        while(error == 0){
+          ekran = TEST_SURESI - flag_2;
+          tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(50, 200);  // Sayım için yeni bir satır 
+          tft.print("Kalan Sure: ");
+          tft.print(ekran+1);
+          
+          if (digitalRead(Lamba) == HIGH) {
+          flag++;
+          Serial.println(flag);
+          } 
+          else if(digitalRead(Lamba)== LOW)
+          {
+            error = 1;
+          }     
+          else if(digitalRead(CheckPiston) == HIGH){
+            error = 2;
+          }
+          
+          if(ekran == 0){
+            error = 3;
+          }
+          testStarted = true;
+          tft.setTextColor(ILI9488_WHITE);
+          tft.setCursor(50, 200);
+          tft.print("Kalan Sure: ");
+          tft.print(ekran);
+          delay(1000); // Her sayı için 1 saniye bekler
+          flag_2++;
+        }
+        tft.setTextColor(ILI9488_BLACK);
+        tft.setCursor(50, 100);
+        tft.print("Test Ediliyor");
+        tft.setCursor(50, 150);
+        tft.print("Lutfen Bekleyin");
+        tft.setTextColor(ILI9488_BLACK);
+        tft.setCursor(50, 200);  // Sayım için yeni bir satır 
+        tft.print("Kalan Sure: ");
+        tft.print(ekran);
+        delay(100);
+
+      } else {
+        tft.setTextColor(ILI9488_BLACK);
+        tft.setCursor(50, 100);
+        tft.print("Test 1 Hazir,");
+        tft.setCursor(50, 150);
+        tft.print("Test etmek icin");
+        tft.setCursor(50, 200);
+        tft.print("Lambayi Takin");
+        delay(100);
+        displayError("Conta Hatasi");
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(500);
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(100);
+      }
+    }
+    if(flag == TEST_SURESI){
+      succes  = true;
+      OncekiDeger = EEPROM.get(0,ParcaSayisi);
+      ParcaSayisi++;
+      EEPROM.put(0, ParcaSayisi);
+    }
+    else{
+      succes  = false;
+    }
+      if(succes == true) {
+
+        tft.setTextColor(ILI9488_GREEN);
+        tft.setCursor(10, 100);
+        tft.print("TEST TAMAMLANDI! ");
+        tft.setCursor(10, 150);
+        tft.print("Lambayi Kasaya atin");
+        
+
+        digitalWrite(buzzerPin, HIGH);
+        delay(1000);
+        digitalWrite(buzzerPin, LOW);
+
+        digitalWrite(relayPin, LOW);
+        digitalWrite(pano, HIGH);
+        delay(1000);
+        digitalWrite(pano, LOW);
+        delay(3000);
+        digitalWrite(relayPin, HIGH);
+        
+        
+
+        tft.setTextColor(ILI9488_BLACK);
+        tft.setCursor(10, 100);
+        tft.print("TEST TAMAMLANDI! ");
+        tft.setCursor(10, 150);
+        tft.print("Lambayi Kasaya atiniz");
+        delay(100);
+      }
+      else if(succes == false){
+        if(error == 2){
+          displayError("Kapak acik");
+          delay(500);
+          digitalWrite(buzzerPin, LOW);
+          delay(500);
+          digitalWrite(buzzerPin, HIGH);
+          delay(500);
+          digitalWrite(buzzerPin, LOW);
+          delay(100); 
+        }
+        else{
+          tft.setTextColor(ILI9488_RED);
+          tft.setCursor(10, 100);
+          tft.print("Lamba Hatasi!");
+          tft.setCursor(10, 150);
+          tft.print("Kalite Kontrol");
+          tft.setCursor(10, 200);
+          tft.print("Bekleniyor");
+
+          digitalWrite(buzzerPin, HIGH);
+          delay(500);
+          digitalWrite(buzzerPin, LOW);
+          delay(500);
+          digitalWrite(buzzerPin, HIGH);
+          delay(500);
+          digitalWrite(buzzerPin, LOW);
+          delay(100);
+          delay(5000);
+          tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(10, 100);
+          tft.print("Lamba Hatasi!");
+          tft.setCursor(10, 150);
+          tft.print("Kalite Kontrol");
+          tft.setCursor(10, 200);
+          tft.print("Bekleniyor");
+          
+      }
+    }
+  }
+}
+
+void displayError(const char* errorMessage) {
+  tft.setTextColor(ILI9488_RED);
+  tft.setCursor(50, 100);
+  tft.print(errorMessage);
+  delay(1000);
+  tft.setTextColor(ILI9488_BLACK);
+  tft.setCursor(50, 100);
+  tft.print(errorMessage);
+}
+void KasayaParca(){
+  tft.setTextColor(ILI9488_BLACK);
+  tft.setCursor(400, 20);
+  tft.print(OncekiDeger);
+
+  tft.setTextColor(ILI9488_WHITE);
+  tft.setCursor(400, 20);
+  tft.print(EEPROM.get(0,ParcaSayisi));
+}
