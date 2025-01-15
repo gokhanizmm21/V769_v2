@@ -1,13 +1,13 @@
-#include <EEPROM.h>
+#include <EEPROM.h> // Ekranda olan sayacın enerji kesildiğinde gitmemesini sağlayan kütüphane
 #include "SPI.h"
 #include <Adafruit_GFX.h>
 #include <ILI9488.h>
 
-#define TFT_CS A5
-#define TFT_DC A3
-#define TFT_RST A4
-#define TEST_SURESI 40
-#define PARCA 50
+#define TFT_CS A5 //Ekran pini
+#define TFT_DC A3 //Ekran pini
+#define TFT_RST A4  //Ekran pini
+#define TEST_SURESI 40 // Test yapılma süresi
+#define PARCA 50 // Kasaya atılabilecek maks parça sayısı
 
 ILI9488 tft = ILI9488(TFT_CS, TFT_DC, TFT_RST);
 
@@ -23,20 +23,21 @@ ILI9488 tft = ILI9488(TFT_CS, TFT_DC, TFT_RST);
 #define ILI9488_BLACK 0x0000
 
 uint8_t selectedOption = 1;  // Başlangıçta ilk seçeneği seçiyoruz
-bool enterPressed = false;
+bool enterPressed = false;   // Bu değişkeni sadece buton basıldığında kullanıyor,herhangi bir şeyi kontrol etmiyor
 const char* isim[] = { "Plaka Lambasi" };
 
-int pano = 19;
+int pano = 19; //Fikstürden parçayı salması için verilen havanın rölesi
 
-unsigned int flag;
-int flag_2,error,ekran,ParcaSayisi,OncekiDeger;
-int relayPin= 24,KapakPin = 26;
+unsigned int flag; //Başarılı test sayısını tutan flag
+int flag_2,error,surec,ParcaSayisi,OncekiDeger;
+const int CheckPiston = 22;//pistonda bulunan switch
+int relayPin= 24,KapakPin = 26; // piston rölesi ve kasadaki switch
 
 
 const int Lamba = A10;
 const int Conta1 = A8;
 const int Conta2 = A9;
-const int CheckPiston = 22;
+
 
 
 const int inputs[] = { Lamba, Conta1, Conta2,};
@@ -48,17 +49,17 @@ void setup() {
     pinMode(inputs[i], INPUT);
     digitalWrite(inputs[i], LOW);
   }
-  pinMode(CheckPiston,INPUT_PULLUP);
-  pinMode(KapakPin,INPUT_PULLUP);
-  pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, HIGH);
+  pinMode(CheckPiston,INPUT); //input olarak ayarlandı
+  pinMode(KapakPin,INPUT);  //input olarak ayarlandı
+  pinMode(relayPin, OUTPUT);  //output olarak ayarlandı
+  digitalWrite(relayPin, HIGH); //ilk başta röle ne durumda olması gerektiği ayarlandı olarak ayarlandı
 
   Serial.begin(9600);
 
-  EEPROM.get(0,ParcaSayisi);
-  EEPROM.put(0,ParcaSayisi);
+  EEPROM.get(0,ParcaSayisi); //hafızadan parcasayisindan 0. biti alıyoruz 
+  EEPROM.put(0,ParcaSayisi); //hafızadan parcasayisina yazıyoruz. Eğer bu iki kod arasına bir değer yazarsanız sayaç oradan başlar.
 
-  pinMode(pano, OUTPUT);
+  pinMode(pano, OUTPUT); //Hava çıkışı output olarak ayarlandı
   pinMode(buzzerPin, OUTPUT);
   pinMode(BUTTON_UP_PIN, INPUT);
   pinMode(BUTTON_DOWN_PIN, INPUT);
@@ -127,20 +128,7 @@ void loop() {
   delay(50);
 
   if (selectedOption == 1) {
-    while(digitalRead(CheckPiston) == HIGH){
-      delay(100);
-      displayError("Kapak acik");
-        digitalWrite(buzzerPin, HIGH);
-        delay(500);
-        digitalWrite(buzzerPin, LOW);
-        delay(500);
-        digitalWrite(buzzerPin, HIGH);
-        delay(500);
-        digitalWrite(buzzerPin, LOW);
-        delay(100);
-        //Serial.println(digitalRead(CheckPiston));
-    }
-    while(digitalRead(Conta1)==HIGH && digitalRead(Conta2)== HIGH){
+     while(digitalRead(Conta1)==HIGH && digitalRead(Conta2)== HIGH){  //Başlangıçta parça takılı olup olmadığını kontrol ediyor eğer takılı ise hata veriyor. Bu tekrar test başlamasını önlüyor
       delay(100);
       displayError("Lambayi Cikarin");
         digitalWrite(buzzerPin, HIGH);
@@ -154,14 +142,28 @@ void loop() {
 
     }
   
+    while(digitalRead(CheckPiston) == HIGH){ //Piston açık mı kontrol ediyor eğer açık ise hata veriyor.
+      delay(100);
+      displayError("Piston Kapak acik");
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(500);
+        digitalWrite(buzzerPin, HIGH);
+        delay(500);
+        digitalWrite(buzzerPin, LOW);
+        delay(100);
+        //Serial.println(digitalRead(CheckPiston));
+    }
+   
     bool testStarted = false;
-    bool succes = false;
-    flag = -1;
+    bool succes = false; // testin doğruluğunu gösteren yer
+    flag = -1; 
     flag_2 = 0;
-    error = 0;
+    error = 0; // hata durumu 0 ise teste girer.
 
   while (!testStarted) {
-    if (digitalRead(Lamba) == LOW && digitalRead(Conta1) == LOW && digitalRead(Conta2) == LOW) {
+    if (digitalRead(Lamba) == LOW && digitalRead(Conta1) == LOW && digitalRead(Conta2) == LOW) { //plaka lambası takılı mı kontrolü yapıyor takılı değilse bekliyor.
         tft.setTextColor(ILI9488_WHITE);
         tft.setCursor(50, 100);
         tft.print("Test 1 Hazir,");
@@ -171,12 +173,35 @@ void loop() {
         tft.print("Lambayi Takin");
         delay(100);
         KasayaParca();
-        if(digitalRead(KapakPin) == HIGH){
 
+        if(digitalRead(KapakPin) == LOW){ //kapak eğer açıksa kapak açık uyarısı veriyor ve sıfırlama yapıyor.
+        tft.setTextColor(ILI9488_BLACK);
+        tft.setCursor(50, 100);
+        tft.print("Test 1 Hazir,");
+        tft.setCursor(50, 150);
+        tft.print("Test etmek icin");
+        tft.setCursor(50, 200);
+        tft.print("Lambayi Takin");
+        delay(100);
+
+          tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(400,20);
+          tft.print(ParcaSayisi);
+          delay(100);
+          tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(400,20);
+          tft.print(OncekiDeger);
+          delay(100);
+
+          while(digitalRead(KapakPin) == LOW){// eğer kapak hala açıksa burada döner kapak kapandığında buradan çıkar.
+          displayError("Kasa kapak acik");
+          delay(500);
+          OncekiDeger = EEPROM.get(0,ParcaSayisi);// ekrana yazı yazdırmak için hafızadan bir önceki değeri alır.
           ParcaSayisi = 0;
-          EEPROM.put(0,ParcaSayisi);
+          EEPROM.put(0,ParcaSayisi); // hafızaya geri atar.
+          }
         }
-      while(ParcaSayisi > PARCA-1){
+      while(ParcaSayisi > PARCA-1){ // Sayaç ile istenilen değeri karşılaştırıp kasa dolu olup olmadığını kontrol eder . Kapak açılmasını bekler.
         tft.setTextColor(ILI9488_BLACK);
         tft.setCursor(50, 100);
         tft.print("Test 1 Hazir,");
@@ -194,10 +219,12 @@ void loop() {
           tft.setTextColor(ILI9488_BLACK);
           tft.setCursor(400,20);
           tft.print(EEPROM.get(0,ParcaSayisi));
+          if(digitalRead(KapakPin) == LOW){ // Kapak açılmasını bekler kapak açıldığında parcasayisini sıfırlayıp hafızaya yazar.
 
           ParcaSayisi = 0;
           EEPROM.put(0,ParcaSayisi);
-          delay(5000);
+        }
+          delay(3000);
           tft.setTextColor(ILI9488_BLACK);
           tft.setCursor(10, 100);
           tft.print("Kasa Doldu!");
@@ -205,7 +232,7 @@ void loop() {
           tft.print("Kasayi bosaltiniz");
     }
         
-      } else if (digitalRead(Conta1) == HIGH && digitalRead(Conta2) == HIGH) {
+      } else if (digitalRead(Conta1) == HIGH && digitalRead(Conta2) == HIGH) { //Parça takılı ise teste başlar.
         tft.setTextColor(ILI9488_BLACK);
         tft.setCursor(50, 100);
         tft.print("Test 1 Hazir,");
@@ -220,33 +247,35 @@ void loop() {
         tft.print("Test Ediliyor");
         tft.setCursor(50, 150);
         tft.print("Lutfen Bekleyin");
-        while(error == 0){
-          ekran = TEST_SURESI - flag_2;
+        while(error == 0){ //error sıfırdan farklı bir değerse testten çıkar.
+          surec = TEST_SURESI - flag_2; // Test süresini tam tersi olarak sayar. 0dan 40 sayar.
           tft.setTextColor(ILI9488_BLACK);
           tft.setCursor(50, 200);  // Sayım için yeni bir satır 
           tft.print("Kalan Sure: ");
-          tft.print(ekran+1);
+          tft.print(surec+1);
           
-          if (digitalRead(Lamba) == HIGH) {
+          if (digitalRead(Lamba) == HIGH) { // LDR okursa flag artar
           flag++;
           Serial.println(flag);
           } 
           else if(digitalRead(Lamba)== LOW)
-          {
+          { // LDR okumazsa testten çıkar
             error = 1;
           }     
-          else if(digitalRead(CheckPiston) == HIGH){
+          else if(digitalRead(CheckPiston) == HIGH){ // Piston açıksa testten çıkar
             error = 2;
           }
-          
-          if(ekran == 0){
+          if(digitalRead(KapakPin)== LOW){ // kapak açılırsa pistten çıkar
+            error = 4;
+          }
+          if(surec == 0){ //Süre bittiğinde testi bitirmesi için verilen kod.
             error = 3;
           }
-          testStarted = true;
+          testStarted = true;// baştaki whiledan çıkması için 
           tft.setTextColor(ILI9488_WHITE);
           tft.setCursor(50, 200);
           tft.print("Kalan Sure: ");
-          tft.print(ekran);
+          tft.print(surec);
           delay(1000); // Her sayı için 1 saniye bekler
           flag_2++;
         }
@@ -258,10 +287,10 @@ void loop() {
         tft.setTextColor(ILI9488_BLACK);
         tft.setCursor(50, 200);  // Sayım için yeni bir satır 
         tft.print("Kalan Sure: ");
-        tft.print(ekran);
+        tft.print(surec);
         delay(100);
 
-      } else {
+      } else { // Eğer hiçbir whilea girmezse conta hatasi verir.
         tft.setTextColor(ILI9488_BLACK);
         tft.setCursor(50, 100);
         tft.print("Test 1 Hazir,");
@@ -281,9 +310,9 @@ void loop() {
         delay(100);
       }
     }
-    if(flag == TEST_SURESI){
+    if(flag == TEST_SURESI){ //Test süresi flag değerine yani ldr okuduğu değere eşitse succes true olur.
       succes  = true;
-      OncekiDeger = EEPROM.get(0,ParcaSayisi);
+      OncekiDeger = EEPROM.get(0,ParcaSayisi); //onceki değeri saklar.
       ParcaSayisi++;
       EEPROM.put(0, ParcaSayisi);
     }
@@ -304,12 +333,13 @@ void loop() {
         digitalWrite(buzzerPin, LOW);
 
         digitalWrite(relayPin, LOW);
+        delay(100);
         digitalWrite(pano, HIGH);
-        delay(1000);
+        delay(1500);
         digitalWrite(pano, LOW);
-        delay(3000);
+        delay(2500);
         digitalWrite(relayPin, HIGH);
-        
+        delay(300);
         
 
         tft.setTextColor(ILI9488_BLACK);
@@ -320,8 +350,23 @@ void loop() {
         delay(100);
       }
       else if(succes == false){
-        if(error == 2){
-          displayError("Kapak acik");
+          if(error == 4){  //While içinde olan errorların nasıl çıkış yapacağını değerlendiren yer
+           tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(400,20);
+          tft.print(ParcaSayisi);
+
+          tft.setTextColor(ILI9488_BLACK);
+          tft.setCursor(400,20);
+          tft.print(ParcaSayisi-1);
+          while(digitalRead(KapakPin) == LOW){
+          displayError("Kasa kapak acik");
+          delay(500);
+          ParcaSayisi = 0;
+          EEPROM.put(0,ParcaSayisi);
+          }
+          }
+        else if(error == 2){
+          displayError("Piston Kapak acik");
           delay(500);
           digitalWrite(buzzerPin, LOW);
           delay(500);
@@ -370,7 +415,7 @@ void displayError(const char* errorMessage) {
   tft.setCursor(50, 100);
   tft.print(errorMessage);
 }
-void KasayaParca(){
+void KasayaParca(){ //Ekrana yazı yazdırmak için kullanılan kod
   tft.setTextColor(ILI9488_BLACK);
   tft.setCursor(400, 20);
   tft.print(OncekiDeger);
